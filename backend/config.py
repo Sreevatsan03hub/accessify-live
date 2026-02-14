@@ -86,7 +86,7 @@ class AppConfig:
     environment: Environment = Environment.DEVELOPMENT
     debug: bool = True
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8001
     cors_origins: list = field(default_factory=lambda: ["*"])
     
     # Component configurations

@@ -2,10 +2,12 @@
 Accessify Backend Application
 AI-powered accessibility platform for Deaf & Hard-of-Hearing users.
 """
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.audio_routes import router as audio_router
-from services.unified_audio_pipeline import init_pipeline
+from services.unified_audio_pipeline import init_pipeline, shutdown_pipeline
 import logging
 
 # Configure logging
@@ -15,10 +17,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    logger.info("Starting Accessify Backend...")
+
+    # Initialize the audio pipeline
+    try:
+        init_pipeline()
+        logger.info("Audio pipeline initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize audio pipeline: {e}")
+
+    yield
+
+    # Cleanup on shutdown
+    logger.info("Shutting down Accessify Backend...")
+    try:
+        shutdown_pipeline()
+    except Exception:
+        pass
+
+
 app = FastAPI(
     title="Accessify API",
     description="AI-powered accessibility platform for Deaf & Hard-of-Hearing users",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -32,33 +58,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(audio_router, prefix="/api/v1/audio")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    logger.info("Starting Accessify Backend...")
-    
-    # Initialize the audio pipeline
-    try:
-        init_pipeline()
-        logger.info("Audio pipeline initialized successfully")
-    except Exception as e:
-        logger.warning(f"Failed to initialize audio pipeline: {e}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Shutting down Accessify Backend...")
-    
-    # Cleanup pipeline
-    from services.unified_audio_pipeline import get_pipeline
-    try:
-        pipeline = get_pipeline()
-        pipeline.shutdown()
-    except Exception:
-        pass
 
 
 @app.get("/")
@@ -79,4 +78,11 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # 🔥 Force localhost for development
+    uvicorn.run(
+        "app:app",
+        host="127.0.0.1",   # <-- FIXED HERE
+        port=8001,
+        reload=True
+    )

@@ -34,6 +34,7 @@ class AudioSourceType(Enum):
     MICROPHONE = "microphone"
     VIDEO_FILE = "video_file"
     AUDIO_FILE = "audio_file"
+    WEBSOCKET = "websocket"
 
 
 @dataclass
@@ -261,7 +262,130 @@ class UnifiedAudioPipeline:
         
         return None
     
-    # ==================== VIDEO/AUDIO FILE METHODS ====================
+        return None
+    
+    # ==================== WEBSOCKET STREAM METHODS ====================
+    
+    def start_stream_capture(
+        self,
+        session_id: str,
+        sample_rate: int = 16000,
+        channels: int = 1,
+        apply_normalization: bool = True,
+        apply_noise_reduction: bool = True
+    ) -> bool:
+        """
+        Start capturing audio from a WebSocket stream.
+        
+        Args:
+            session_id: Unique identifier for the stream
+            sample_rate: Audio sample rate
+            channels: Number of channels
+            apply_normalization: Whether to normalize audio
+            apply_noise_reduction: Whether to apply noise reduction
+            
+        Returns:
+            True if started successfully
+        """
+        if self._is_streaming:
+            logger.warning("Already streaming. Stop current stream first.")
+            return False
+            
+        self._current_source = AudioSource(
+            source_type=AudioSourceType.WEBSOCKET,
+            path=session_id,  # Use session_id as path
+            metadata={
+                'normalization': apply_normalization,
+                'noise_reduction': apply_noise_reduction,
+                'sample_rate': sample_rate,
+                'channels': channels
+            }
+        )
+        self._is_streaming = True
+        logger.info(f"Started WebSocket stream capture for session {session_id}")
+        return True
+        
+    def stop_stream_capture(self):
+        """Stop WebSocket stream capture."""
+        if self._is_streaming and self._current_source and self._current_source.source_type == AudioSourceType.WEBSOCKET:
+            self._is_streaming = False
+            session_id = self._current_source.path
+            self._current_source = None
+            logger.info(f"Stopped WebSocket stream capture for session {session_id}")
+            
+    def push_audio_chunk(
+        self,
+        audio_data: Any,
+        sample_rate: Optional[int] = None
+    ) -> Optional[AudioData]:
+        """
+        Process an incoming audio chunk from a stream.
+        
+        Args:
+            audio_data: Audio data (numpy array or bytes)
+            sample_rate: Sample rate of incoming chunk (if different from session)
+            
+        Returns:
+            Processed AudioData object or None
+        """
+        if not self._is_streaming or not self._current_source:
+            logger.warning("Cannot push audio: No active stream")
+            return None
+            
+        try:
+            import numpy as np
+            
+            # Get metadata from current source
+            metadata = self._current_source.metadata or {}
+            target_sample_rate = metadata.get('sample_rate', 16000)
+            
+            # Convert inputs to float32 numpy array
+            if isinstance(audio_data, bytes):
+                # Assume 16-bit PCM if bytes
+                chunk = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32767.0
+            elif isinstance(audio_data, np.ndarray):
+                chunk = audio_data.astype(np.float32)
+                # If int16 range, normalize
+                if np.abs(chunk).max() > 1.0:
+                    chunk = chunk / 32767.0
+            else:
+                logger.error(f"Unsupported audio data type: {type(audio_data)}")
+                return None
+            
+            # Resample if needed (simple decimation/interpolation for now)
+            # production would use scipy.signal.resample
+            if sample_rate and sample_rate != target_sample_rate:
+                # Basic resampling ratio
+                ratio = target_sample_rate / sample_rate
+                new_length = int(len(chunk) * ratio)
+                chunk = np.interp(
+                    np.linspace(0, len(chunk), new_length),
+                    np.arange(len(chunk)),
+                    chunk
+                )
+            
+            # Apply processing
+            if metadata.get('normalization', True):
+                chunk = normalize_audio(chunk)
+            
+            if metadata.get('noise_reduction', True):
+                chunk = apply_noise_reduction(chunk)
+            
+            # Calculate duration
+            duration = len(chunk) / target_sample_rate
+            
+            return AudioData(
+                data=chunk,
+                sample_rate=target_sample_rate,
+                channels=metadata.get('channels', 1),
+                duration=duration,
+                source=self._current_source,
+                timestamp=0.0 # Could add real timestamp logic here
+            )
+            
+        except Exception as e:
+            logger.error(f"Error pushing audio chunk: {e}")
+            return None
     
     def extract_from_video(
         self,
@@ -493,3 +617,13 @@ def init_pipeline(
     )
     
     return _pipeline
+
+
+def shutdown_pipeline():
+    """Shutdown the global pipeline instance."""
+    global _pipeline
+    
+    if _pipeline is not None:
+        _pipeline.shutdown()
+        _pipeline = None
+        logger.info("Global audio pipeline shut down")

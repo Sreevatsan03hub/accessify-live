@@ -70,6 +70,14 @@ class VideoInfoResponse(BaseModel):
     format: str
 
 
+class ModelInfoResponse(BaseModel):
+    """Response for model information"""
+    model: str
+    device: str
+    language: str
+    status: str
+
+
 # ==================== SYNCHRONOUS ENDPOINTS ====================
 
 @router.get("/devices", response_model=AudioDeviceResponse)
@@ -100,6 +108,31 @@ async def get_capture_status():
         sample_rate=info.get('sample_rate', 16000),
         channels=info.get('channels', 1)
     )
+
+
+@router.get("/model-info", response_model=ModelInfoResponse)
+async def get_model_info():
+    """
+    Get Whisper model information.
+    """
+    try:
+        from services.speech_to_text import get_stt_service
+        stt = get_stt_service()
+        return ModelInfoResponse(
+            model=stt.model_name,
+            device=str(stt.device),
+            language="en",
+            status="ready"
+        )
+    except Exception as e:
+        logger.warning(f"Model info request (non-critical): {e}")
+        # Return a default response instead of erroring
+        return ModelInfoResponse(
+            model="whisper-base",
+            device="cpu",
+            language="en",
+            status="lazy-load"
+        )
 
 
 @router.post("/capture/start")
@@ -458,4 +491,243 @@ async def websocket_video_audio(websocket: WebSocket, session_id: str):
         await websocket.send_json({"error": str(e)})
     
     finally:
+        await websocket.close()
+
+
+# ==================== SPEECH-TO-TEXT ENDPOINTS ====================
+
+class TranscriptionResponse(BaseModel):
+    """Response for speech-to-text transcription"""
+    success: bool
+    text: Optional[str] = None
+    language: Optional[str] = None
+    duration: Optional[float] = None
+    confidence: Optional[float] = None
+    words: Optional[list] = None
+    processing_time: Optional[float] = None
+    error: Optional[str] = None
+
+
+class TranscriptionConfigRequest(BaseModel):
+    """Configuration for speech-to-text"""
+    model_size: str = "base"  # tiny, base, small, medium, large
+    language: Optional[str] = None
+    word_timestamps: bool = True
+
+
+@router.post("/transcribe/audio", response_model=TranscriptionResponse)
+async def transcribe_audio_file(
+    audio_file: UploadFile = File(..., description="Audio file to transcribe"),
+    language: Optional[str] = Query(None, description="Language code (en, hi, ta, etc.)"),
+    model_size: str = Query("base", description="Whisper model size"),
+    word_timestamps: bool = Query(True, description="Include word-level timestamps")
+):
+    """
+    Transcribe an audio file to text using OpenAI Whisper.
+    """
+    try:
+        from services.speech_to_text import get_stt_service
+        import tempfile
+        import os
+        
+        # Save uploaded file temporarily
+        temp_filename = f"{uuid.uuid4()}_{audio_file.filename}"
+        temp_path = os.path.join(UPLOAD_DIR, temp_filename)
+        
+        content = await audio_file.read()
+        with open(temp_path, "wb") as f:
+            f.write(content)
+        
+        try:
+            # Get STT service and transcribe
+            stt = get_stt_service()
+            logger.info(f"Transcribing {audio_file.filename} with model {model_size}")
+            
+            result = stt.transcribe_audio(
+                audio_path=temp_path,
+                language=language,
+                model_size=model_size,
+                word_timestamps=word_timestamps
+            )
+            
+            logger.info(f"Transcription success: {result.text[:100]}")
+            
+            return TranscriptionResponse(
+                success=True,
+                text=result.text,
+                language=result.language,
+                duration=result.duration,
+                confidence=result.confidence,
+                words=result.words,
+                processing_time=result.processing_time
+            )
+        
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+                
+    except Exception as e:
+        logger.error(f"Transcription error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+@router.post("/transcribe/video", response_model=TranscriptionResponse)
+async def transcribe_video_file(
+    video_file: UploadFile = File(..., description="Video file to transcribe"),
+    language: Optional[str] = Query(None, description="Language code (en, hi, ta, etc.)"),
+    model_size: str = Query("base", description="Whisper model size"),
+    start_time: Optional[float] = Query(0, ge=0, description="Start time in seconds"),
+    end_time: Optional[float] = Query(None, ge=0, description="End time in seconds")
+):
+    """
+    Transcribe a video file to text using OpenAI Whisper.
+    Extracts audio from video and transcribes it.
+    """
+    try:
+        from services.speech_to_text import get_stt_service
+        
+        # Save uploaded video temporarily
+        video_filename = f"{uuid.uuid4()}_{video_file.filename}"
+        video_path = os.path.join(UPLOAD_DIR, video_filename)
+        
+        content = await video_file.read()
+        with open(video_path, "wb") as f:
+            f.write(content)
+        
+        try:
+            # Transcribe video
+            stt = get_stt_service()
+            result = stt.transcribe_video(
+                video_path=video_path,
+                start_time=start_time,
+                end_time=end_time,
+                language=language
+            )
+            
+            return TranscriptionResponse(
+                success=True,
+                text=result.text,
+                language=result.language,
+                duration=result.duration,
+                confidence=result.confidence,
+                words=result.words,
+                processing_time=result.processing_time
+            )
+        finally:
+            # Clean up temp file
+            if os.path.exists(video_path):
+                os.remove(video_path)
+                
+    except ImportError as e:
+        logger.error(f"Speech-to-text service not available: {e}")
+        raise HTTPException(status_code=500, detail="Speech-to-text service not available. Install openai-whisper.")
+    except Exception as e:
+        logger.error(f"Video transcription error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/transcribe/model-info")
+async def get_stt_model_info():
+    """
+    Get information about the speech-to-text model.
+    """
+    try:
+        from services.speech_to_text import get_stt_service
+        stt = get_stt_service()
+        return stt.get_model_info()
+    except ImportError:
+        return {
+            "status": "not_available",
+            "message": "Install openai-whisper to enable speech-to-text"
+        }
+
+
+@router.websocket("/transcribe/stream")
+async def websocket_transcribe_stream(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time audio transcription.
+    Streams transcribed text as audio chunks are received.
+    """
+    await websocket.accept()
+    
+    pipeline = get_pipeline()
+    session_id = str(uuid.uuid4())
+    
+    try:
+        from services.speech_to_text import get_stt_service
+        import numpy as np
+        import base64
+        
+        stt = get_stt_service()
+        
+        # Get parameters
+        language = websocket.query_params.get("language", "en")
+        sample_rate = int(websocket.query_params.get("sample_rate", 16000))
+        
+        logger.info(f"Starting real-time transcription stream (language: {language})")
+        
+        # Start pipeline session
+        pipeline.start_stream_capture(
+            session_id=session_id,
+            sample_rate=sample_rate,
+            channels=1
+        )
+        
+        audio_buffer = []
+        
+        while True:
+            try:
+                message = await websocket.receive_json()
+                
+                if message.get("type") == "audio_chunk":
+                    # Decode base64 audio
+                    audio_b64 = message.get("data")
+                    audio_bytes = base64.b64decode(audio_b64)
+                    
+                    # Push to pipeline for processing (normalization, etc.)
+                    processed_audio = pipeline.push_audio_chunk(
+                        audio_data=audio_bytes,
+                        sample_rate=sample_rate
+                    )
+                    
+                    if processed_audio is not None and len(processed_audio.data) > 0:
+                        audio_buffer.append(processed_audio.data)
+                        
+                        # Just debug logging here
+                        # logger.debug(f"Pushed chunk duration: {processed_audio.duration}s")
+                    
+                elif message.get("type") == "end":
+                    # Transcribe accumulated audio
+                    if audio_buffer:
+                        import torch
+                        audio_combined = np.concatenate(audio_buffer)
+                        
+                        result = stt.transcribe_realtime_audio(
+                            audio_data=audio_combined,
+                            sample_rate=16000,
+                            language=language
+                        )
+                        
+                        await websocket.send_json({
+                            "type": "transcription",
+                            "text": result.text,
+                            "language": result.language
+                        })
+                    
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Streaming transcription error: {e}")
+                await websocket.send_json({"error": str(e)})
+                break
+        
+    except Exception as e:
+        logger.error(f"WebSocket transcription error: {e}")
+    
+    finally:
+        pipeline.stop_stream_capture()
         await websocket.close()

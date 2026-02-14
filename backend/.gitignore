@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+uploads/
+test_client.html
+test_upload.ps1
+speech_test.wav
+test_audio.wav
