@@ -29,7 +29,7 @@ class TranscriptionResult:
 class WhisperSTT:
     """Whisper-based speech-to-text service."""
     
-    def __init__(self, model_size: str = "base", device: str = None):
+    def __init__(self, model_size: str = "small", device: str = None):
         """
         Initialize Whisper STT service.
         
@@ -119,6 +119,7 @@ class WhisperSTT:
             
             # Transcribe using the loaded audio array
             logger.info("Starting transcription...")
+            
             result = model.transcribe(
                 audio,
                 language=language,
