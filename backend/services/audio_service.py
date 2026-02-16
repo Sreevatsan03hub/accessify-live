@@ -441,3 +441,38 @@ def convert_audio_format(
         audio_data = (audio_data * 2147483647).astype(np.int32)
     
     return audio_data
+
+
+def calculate_rms(audio_data: np.ndarray) -> float:
+    """
+    Calculate Root Mean Square (RMS) amplitude of audio data.
+    
+    Args:
+        audio_data: Input audio data (float32)
+        
+    Returns:
+        RMS value
+    """
+    if len(audio_data) == 0:
+        return 0.0
+    return np.sqrt(np.mean(audio_data ** 2))
+
+
+def is_silence(audio_data: np.ndarray, threshold_db: float = -40.0) -> bool:
+    """
+    Check if audio data is silence based on dB threshold.
+    
+    Args:
+        audio_data: Input audio data
+        threshold_db: Threshold in decibels (relative to full scale)
+        
+    Returns:
+        True if silence, False otherwise
+    """
+    rms = calculate_rms(audio_data)
+    if rms == 0:
+        return True
+        
+    # Convert to dB
+    db = 20 * np.log10(rms)
+    return db < threshold_db

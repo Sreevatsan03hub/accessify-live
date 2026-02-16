@@ -650,7 +650,7 @@ async def get_stt_model_info():
 async def websocket_transcribe_stream(websocket: WebSocket):
     """
     WebSocket endpoint for real-time audio transcription.
-    Streams transcribed text as audio chunks are received.
+    Streams transcribed text as audio chunks are received using VAD.
     """
     await websocket.accept()
     
@@ -659,6 +659,8 @@ async def websocket_transcribe_stream(websocket: WebSocket):
     
     try:
         from services.speech_to_text import get_stt_service
+        from services.audio_service import is_silence, calculate_rms
+        from starlette.websockets import WebSocketDisconnect
         import numpy as np
         import base64
         
@@ -668,19 +670,36 @@ async def websocket_transcribe_stream(websocket: WebSocket):
         language = websocket.query_params.get("language", "en")
         sample_rate = int(websocket.query_params.get("sample_rate", 16000))
         
-        logger.info(f"Starting real-time transcription stream (language: {language})")
+        # IMPORTANT: Disable normalization for streaming to avoid boosting silence/noise
+        # Normalization should only happen on the full segment if needed, not per-chunk
+        normalize = websocket.query_params.get("normalize", "false").lower() == "true"
+        
+        logger.info(f"Starting real-time transcription stream (language: {language}, normalize: {normalize})")
         
         # Start pipeline session
         pipeline.start_stream_capture(
             session_id=session_id,
             sample_rate=sample_rate,
-            channels=1
+            channels=1,
+            apply_normalization=normalize,
+            apply_noise_reduction=False # Disable NR too, to be safe
         )
         
         audio_buffer = []
+        buffer_duration = 0.0
+        silence_duration = 0.0
+        
+        # Thresholds
+        SILENCE_THRESHOLD_SECONDS = 1.0  # Increased slightly to avoid cutting words
+        MAX_BUFFER_SECONDS = 15.0        # Force transcribe after 15s
+        MIN_AUDIO_SECONDS = 0.5          # Minimum audio to transcribe
+        SILENCE_DB_THRESHOLD = -50.0     # Lowered threshold for quieter mics
+        
+        chunk_count = 0
         
         while True:
             try:
+                # Receive with a timeout or just wait
                 message = await websocket.receive_json()
                 
                 if message.get("type") == "audio_chunk":
@@ -688,22 +707,86 @@ async def websocket_transcribe_stream(websocket: WebSocket):
                     audio_b64 = message.get("data")
                     audio_bytes = base64.b64decode(audio_b64)
                     
-                    # Push to pipeline for processing (normalization, etc.)
+                    # Push to pipeline (conversion + normalization)
                     processed_audio = pipeline.push_audio_chunk(
                         audio_data=audio_bytes,
                         sample_rate=sample_rate
                     )
                     
                     if processed_audio is not None and len(processed_audio.data) > 0:
-                        audio_buffer.append(processed_audio.data)
+                        chunk_duration = processed_audio.duration
                         
-                        # Just debug logging here
-                        # logger.debug(f"Pushed chunk duration: {processed_audio.duration}s")
+                        # Check for silence
+                        if is_silence(processed_audio.data, threshold_db=SILENCE_DB_THRESHOLD):
+                            silence_duration += chunk_duration
+                        else:
+                            silence_duration = 0.0
+                            
+                        audio_buffer.append(processed_audio.data)
+                        buffer_duration += chunk_duration
+                        
+                        # Trigger transcription?
+                        should_transcribe = (
+                            (silence_duration >= SILENCE_THRESHOLD_SECONDS and buffer_duration >= MIN_AUDIO_SECONDS) or
+                            (buffer_duration >= MAX_BUFFER_SECONDS)
+                        )
+                        
+                        if should_transcribe:
+                            # Concatenate and transcribe
+                            audio_combined = np.concatenate(audio_buffer)
+                            
+                            # Check absolute peak level
+                            audio_peak = np.max(np.abs(audio_combined))
+                            
+                            # threshold: 0.001 is about -60dBfs (very sensitive)
+                            if audio_peak < 0.001:
+                                logger.info(f"Skipping transcription: Signal too weak (Peak: {audio_peak:.4f})")
+                                # Reset buffer
+                                audio_buffer = []
+                                buffer_duration = 0.0
+                                silence_duration = 0.0
+                                continue
+                            
+                            # Apply advanced preprocessing pipeline
+                            from services.audio_preprocessing import preprocess_for_transcription
+                            audio_combined = preprocess_for_transcription(
+                                audio_combined,
+                                sample_rate=16000,
+                                apply_highpass=True,
+                                apply_noise_reduction=True,
+                                apply_normalization=True,
+                                target_rms=0.05,  # -26dBFS, optimal for Whisper
+                                max_gain=100.0    # Allow up to 100x gain (was 30x)
+                            )
+                            
+                            logger.info(f"Transcribing segment: {buffer_duration:.2f}s (Silence: {silence_duration:.2f}s, Processed Peak: {np.max(np.abs(audio_combined)):.4f})")
+                            
+                            try:
+                                result = stt.transcribe_realtime_audio(
+                                    audio_data=audio_combined,
+                                    sample_rate=16000,
+                                    language=language
+                                )
+                                
+                                if result.text.strip():
+                                    await websocket.send_json({
+                                        "type": "transcription",
+                                        "text": result.text,
+                                        "language": result.language,
+                                        "is_final": True,
+                                        "duration": buffer_duration
+                                    })
+                            except Exception as e:
+                                logger.error(f"Transcription failed: {e}")
+                            
+                            # Reset buffer
+                            audio_buffer = []
+                            buffer_duration = 0.0
+                            silence_duration = 0.0
                     
                 elif message.get("type") == "end":
-                    # Transcribe accumulated audio
-                    if audio_buffer:
-                        import torch
+                    # Transcribe remaining audio
+                    if audio_buffer and buffer_duration >= MIN_AUDIO_SECONDS:
                         audio_combined = np.concatenate(audio_buffer)
                         
                         result = stt.transcribe_realtime_audio(
@@ -712,22 +795,54 @@ async def websocket_transcribe_stream(websocket: WebSocket):
                             language=language
                         )
                         
-                        await websocket.send_json({
-                            "type": "transcription",
-                            "text": result.text,
-                            "language": result.language
-                        })
+                        if result.text.strip():
+                            await websocket.send_json({
+                                "type": "transcription",
+                                "text": result.text,
+                                "language": result.language,
+                                "is_final": True
+                            })
                     
                     break
                     
+            except WebSocketDisconnect:
+                logger.info("WebSocket disconnected by client")
+                break
+            except RuntimeError as e:
+                # Catch "Cannot call 'send' once a close message has been sent"
+                if "close message" in str(e):
+                    logger.info("WebSocket closed during processing")
+                    break
+                raise e
             except Exception as e:
                 logger.error(f"Streaming transcription error: {e}")
-                await websocket.send_json({"error": str(e)})
+                # Only try to send error if socket is likely open
+                try:
+                    await websocket.send_json({"error": str(e)})
+                except:
+                    pass
                 break
         
     except Exception as e:
-        logger.error(f"WebSocket transcription error: {e}")
+        logger.error(f"WebSocket setup error: {e}")
     
     finally:
         pipeline.stop_stream_capture()
-        await websocket.close()
+        
+        # Debug: Save the full session audio to file
+        if audio_buffer:
+            try:
+                import scipy.io.wavfile as wav
+                debug_path = os.path.join(AUDIO_DIR, "debug_session.wav")
+                full_audio = np.concatenate(audio_buffer)
+                # Convert back to int16 for saving
+                int16_audio = (full_audio * 32767).astype(np.int16)
+                wav.write(debug_path, sample_rate, int16_audio)
+                logger.info(f"Saved debug session audio to {debug_path}")
+            except Exception as e:
+                logger.error(f"Failed to save debug audio: {e}")
+
+        try:
+            await websocket.close()
+        except:
+            pass
