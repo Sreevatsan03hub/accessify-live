@@ -12,17 +12,18 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Singleton instance
-_stt_service = None
+_stt_service =  None
 
 
 @dataclass
 class TranscriptionResult:
-    """Result of speech-to-text transcription."""
+    """Standardized result from STT service."""
     text: str
     language: str
     duration: float
-    confidence: float = 0.0
-    words: Optional[List[dict]] = None
+    confidence: float
+    words: Optional[list] = None
+    segments: Optional[list] = None  # Added for VTT generation
     processing_time: float = 0.0
 
 
@@ -114,6 +115,18 @@ class WhisperSTT:
             logger.info(f"Loading audio from {audio_path}")
             audio, sr = librosa.load(audio_path, sr=16000)
             
+            # Safety check for empty/short audio
+            if len(audio) < 1600: # < 0.1s
+                logger.warning("Audio too short for transcription, skipping.")
+                return TranscriptionResult(
+                    text="",
+                    language="en",
+                    duration=0.0,
+                    confidence=0.0,
+                    words=[],
+                    segments=[]
+                )
+
             # Convert to float32 and normalize
             audio = audio.astype(np.float32)
             
@@ -123,30 +136,101 @@ class WhisperSTT:
             result = model.transcribe(
                 audio,
                 language=language,
-                verbose=False
+                verbose=False,
+                condition_on_previous_text=False, # Reduces hallucinations
+                temperature=0.0, # Deterministic
+                initial_prompt="Classroom lecture. Clear speech. Sreevatsan. Accessify. Student. Teacher."
             )
             
             processing_time = (datetime.now() - start_time).total_seconds()
+            
+            # Filter hallucinations based on no_speech_prob and logprob if segments available
+            final_text = ""
+            if "segments" in result:
+                valid_segments = []
+                for segment in result["segments"]:
+                    # Filter out segments with high probability of no speech (silence/noise)
+                    no_speech_prob = segment.get("no_speech_prob", 0.0)
+                    avg_logprob = segment.get("avg_logprob", 0.0)
+                    compression_ratio = segment.get("compression_ratio", 0.0)
+                    
+                    logger.info(f"[STT-Segment] '{segment['text'].strip()}' "
+                               f"(no_speech={no_speech_prob:.4f}, logprob={avg_logprob:.4f}, "
+                               f"compress={compression_ratio:.4f})")
+
+                    # Thresholds (stricter to reduce hallucinations):
+                    # no_speech > 0.65 → likely silence/noise (Relaxed from 0.45)
+                    # logprob  < -0.8  → low confidence (Relaxed from -0.6)
+                    # compression > 2.0 → repetitive loop
+                    if (no_speech_prob < 0.65 and 
+                        avg_logprob > -0.8 and 
+                        compression_ratio < 2.0):
+                        valid_segments.append(segment["text"])
+                    else:
+                        logger.info(f"[STT-Filter] Dropped: '{segment['text'].strip()}'")
+                
+                final_text = "".join(valid_segments).strip()
+            else:
+                final_text = result.get("text", "").strip()
             
             # Extract words if available
             words = None
             if word_timestamps and "words" in result:
                 words = result["words"]
             
-            logger.info(f"Transcription complete: {result.get('text', '')[:100]}")
+            logger.info(f"Transcription complete in {processing_time:.2f}s: '{final_text}'")
             
             return TranscriptionResult(
-                text=result.get("text", ""),
+                text=final_text,
                 language=result.get("language", language or "en"),
                 duration=len(audio) / sr,
-                confidence=result.get("confidence", 0.0),
-                words=words,
+                confidence=float(result.get("confidence", 0.0)),
+                words=result.get("words"),
+                segments=result.get("segments"),
                 processing_time=processing_time
             )
         
         except Exception as e:
             logger.error(f"Transcription failed: {e}", exc_info=True)
-            raise
+            # Return empty result instead of crashing
+            return TranscriptionResult(
+                text="",
+                language="en",
+                duration=0.0,
+                confidence=0.0,
+                words=[],
+                segments=[]
+            )
+
+    def generate_vtt(self, segments: list) -> str:
+        """
+        Generate WebVTT formatted string from segments.
+        
+        Args:
+            segments: List of segment dictionaries from Whisper
+            
+        Returns:
+            VTT formatted string
+        """
+        vtt = "WEBVTT\n\n"
+        
+        for i, segment in enumerate(segments):
+            start = self._format_timestamp(segment["start"])
+            end = self._format_timestamp(segment["end"])
+            text = segment["text"].strip()
+            
+            vtt += f"{i+1}\n"
+            vtt += f"{start} --> {end}\n"
+            vtt += f"{text}\n\n"
+            
+        return vtt
+
+    def _format_timestamp(self, seconds: float) -> str:
+        """Format seconds into MM:SS.mmm for VTT."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
     
     def transcribe_video(
         self,
@@ -217,28 +301,34 @@ class WhisperSTT:
         language: Optional[str] = None
     ) -> TranscriptionResult:
         """
-        Transcribe audio data in real-time.
-        
-        Args:
-            audio_data: Audio data as numpy array (float32, normalized to [-1, 1])
-            sample_rate: Sample rate of audio
-            language: Language code
-            
-        Returns:
-            TranscriptionResult with transcribed text
+        Transcribe audio data from a numpy array (used for real-time stream).
         """
         try:
-            import tempfile
             import soundfile as sf
             import os
+            import uuid
             
-            # Save audio to temporary WAV file
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp_audio_path = tmp.name
+            # Basic validation
+            if audio_data is None or len(audio_data) < 1600:
+                return TranscriptionResult(
+                    text="",
+                    language="en",
+                    duration=0.0,
+                    confidence=0.0,
+                    words=[],
+                    segments=[]
+                )
+
+            # Create temporary file
+            tmp_filename = f"live_{uuid.uuid4()}.wav"
+            tmp_audio_path = os.path.join(os.getcwd(), "tmp", tmp_filename)
+            
+            # Ensure tmp directory exists
+            os.makedirs(os.path.join(os.getcwd(), "tmp"), exist_ok=True)
             
             try:
                 # Write audio data
-                sf.write(tmp_audio_path, audio_data, sample_rate)
+                sf.write(tmp_audio_path, audio_data, 16000) # Assuming 16kHz for real-time
                 
                 # Transcribe
                 transcription = self.transcribe_audio(
@@ -276,12 +366,12 @@ class WhisperSTT:
         }
 
 
-def get_stt_service(model_size: str = "base", device: str = None) -> WhisperSTT:
+def get_stt_service(model_size: str = "small", device: str = None) -> WhisperSTT:
     """
     Get or create the singleton STT service.
     
     Args:
-        model_size: Model size (default: base)
+        model_size: Model size (default: small)
         device: Device to use (default: cpu)
         
     Returns:

@@ -458,7 +458,7 @@ def calculate_rms(audio_data: np.ndarray) -> float:
     return np.sqrt(np.mean(audio_data ** 2))
 
 
-def is_silence(audio_data: np.ndarray, threshold_db: float = -40.0) -> bool:
+def is_silence(audio_data: np.ndarray, threshold_db: float = -35.0) -> bool:
     """
     Check if audio data is silence based on dB threshold.
     

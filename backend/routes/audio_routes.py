@@ -669,12 +669,20 @@ async def websocket_transcribe_stream(websocket: WebSocket):
         # Get parameters
         language = websocket.query_params.get("language", "en")
         sample_rate = int(websocket.query_params.get("sample_rate", 16000))
+        translate_to = websocket.query_params.get("translate_to", None)  # NEW: hi, ta, te
         
         # IMPORTANT: Disable normalization for streaming to avoid boosting silence/noise
         # Normalization should only happen on the full segment if needed, not per-chunk
         normalize = websocket.query_params.get("normalize", "false").lower() == "true"
         
-        logger.info(f"Starting real-time transcription stream (language: {language}, normalize: {normalize})")
+        # Initialize translator if translation is requested
+        translator = None
+        if translate_to:
+            from services.translation_service import get_translator
+            translator = get_translator()
+            logger.info(f"Translation enabled: en -> {translate_to}")
+        
+        logger.info(f"Starting real-time transcription stream (language: {language}, normalize: {normalize}, translate_to: {translate_to})")
         
         # Start pipeline session
         pipeline.start_stream_capture(
@@ -769,13 +777,60 @@ async def websocket_transcribe_stream(websocket: WebSocket):
                                 )
                                 
                                 if result.text.strip():
-                                    await websocket.send_json({
+                                    # Simplification
+                                    from services.text_simplification_service import get_simplifier
+                                    simplifier = get_simplifier()
+                                    simplified_text = simplifier.simplify(result.text)
+                                    
+                                    # Keyword Detection
+                                    from services.keyword_detection_service import get_keyword_detector
+                                    keyword_detector = get_keyword_detector()
+                                    keywords = keyword_detector.extract_keywords(result.text)
+                                    enriched_text = keyword_detector.enrich_text(result.text)
+                                    
+                                    # Sound Detection (Non-Speech)
+                                    # We run this on the same buffer. YAMNet needs >0.975s so our 1s buffer is good.
+                                    from services.sound_detection_service import get_sound_detector
+                                    sound_detector = get_sound_detector()
+                                    sound_event = sound_detector.detect_sound(audio_buffer)
+                                    
+                                    # Tone & Intent Analysis (Feature 7)
+                                    from services.tone_analysis_service import get_tone_service
+                                    tone_service = get_tone_service()
+                                    tone_data = tone_service.analyze_tone(result.text)
+                                    
+                                    response_data = {
                                         "type": "transcription",
                                         "text": result.text,
+                                        "simplified_text": simplified_text,
+                                        "enriched_text": enriched_text,
+                                        "keywords": keywords,
+                                        "sound_event": sound_event, # {"event": "Applause", "emoji": "👏"}
+                                        "tone": tone_data, # {"emotion": "happy", "intent": "statement", "emoji": "😊"}
                                         "language": result.language,
                                         "is_final": True,
                                         "duration": buffer_duration
-                                    })
+                                    }
+                                    
+                                    # Add translation if requested
+                                    if translator and translate_to:
+                                        try:
+                                            translation_result = translator.translate(
+                                                result.text,
+                                                target_lang=translate_to
+                                            )
+                                                                                        
+                                            # Enrich the TRANSLATED text (User Request)
+                                            # This will add emojis and highlight keywords in the target language (e.g. "தேர்வு 📘")
+                                            enriched_translation = keyword_detector.enrich_text(translation_result.translated_text)
+                                            
+                                            response_data["translated_text"] = enriched_translation
+                                            response_data["target_language"] = translate_to
+                                        except Exception as trans_err:
+                                            logger.error(f"Translation failed: {trans_err}")
+                                            response_data["translation_error"] = str(trans_err)
+                                    
+                                    await websocket.send_json(response_data)
                             except Exception as e:
                                 logger.error(f"Transcription failed: {e}")
                             
