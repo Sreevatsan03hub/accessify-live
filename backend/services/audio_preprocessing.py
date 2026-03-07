@@ -8,7 +8,6 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-
 def high_pass_filter(audio: np.ndarray, sample_rate: int = 16000, cutoff: float = 80.0) -> np.ndarray:
     """
     Apply high-pass filter to remove low-frequency rumble.
@@ -75,7 +74,7 @@ def reduce_noise(audio: np.ndarray, sample_rate: int = 16000, noise_duration: fl
         return audio
 
 
-def normalize_rms(audio: np.ndarray, target_rms: float = 0.05, max_gain: float = 100.0) -> np.ndarray:
+def normalize_rms(audio: np.ndarray, target_rms: float = 0.05, max_gain: float = 30.0) -> np.ndarray:
     """
     Normalize audio based on RMS (Root Mean Square) level.
     This is more robust than peak normalization for speech.
@@ -125,7 +124,7 @@ def preprocess_for_transcription(
     apply_noise_reduction: bool = True,
     apply_normalization: bool = True,
     target_rms: float = 0.05,
-    max_gain: float = 100.0
+    max_gain: float = 30.0
 ) -> np.ndarray:
     """
     Full preprocessing pipeline for speech-to-text.

@@ -7,3 +7,9 @@ test_client.html
 test_upload.ps1
 speech_test.wav
 test_audio.wav
+
+# Firebase config (DO NOT COMMIT)
+serviceAccountKey.json
+# Local Persistence
+data/
+videos/
