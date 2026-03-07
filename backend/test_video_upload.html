@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Upload Test - Accessify</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            background: #f8f9ff;
+            transition: all 0.3s;
+        }
+
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+
+        .upload-section.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        select {
+            padding: 10px 15px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .process-btn {
+            background: #10b981;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .process-btn:hover {
+            background: #059669;
+        }
+
+        .process-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .results {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .result-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-label {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .result-text {
+            color: #333;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8ebff;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .error {
+            background: #fee;
+            border-left-color: #f44;
+            color: #c00;
+        }
+
+        /* Moving Emojis & Highlighted Keywords */
+        .key-term {
+            display: inline-block;
+            background: linear-gradient(120deg, #fccb90 0%, #d57eeb 100%);
+            box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.1);
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 0 2px;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .key-term:hover {
+            transform: scale(1.1);
+            transition: transform 0.2s;
+            cursor: default;
+        }
+
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Video Player Caption Styling (WebVTT) */
+        video::cue {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Highlighted Keywords in Video */
+        video::cue(.kt) {
+            color: #d57eeb;
+            /* Light Purple text */
+            font-weight: bold;
+            text-shadow: 0 0 5px #d57eeb, 1px 1px 2px black;
+            /* Note: 'background' inside ::cue is tricky in some browsers, but color works reliably */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎬 Video Upload Test</h1>
+        <p class="subtitle">Upload a video to test STT + Translation pipeline</p>
+
+        <div class="upload-section" id="dropZone">
+            <p style="font-size: 48px; margin-bottom: 15px;">📹</p>
+            <p style="margin-bottom: 20px; color: #666;">Drag & drop your video here or click to browse</p>
+            <input type="file" id="videoFile" accept="video/*">
+            <button class="upload-btn" onclick="document.getElementById('videoFile').click()">
+                Choose Video File
+            </button>
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <strong>Selected:</strong> <span id="fileName"></span><br>
+            <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+
+        <div class="controls">
+            <select id="translateLang">
+                <option value="">No Translation</option>
+                <option value="hi">Hindi (हिन्दी)</option>
+                <option value="ta">Tamil (தமிழ்)</option>
+                <option value="te">Telugu (తెలుగు)</option>
+            </select>
+
+            <button class="process-btn" id="processBtn" onclick="processVideo()" disabled>
+                Process Video
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing video... This may take a few moments.</p>
+        </div>
+
+        <div class="results" id="results">
+            <div class="result-item" id="videoSection" style="display: none;">
+                <div class="result-label">🎬 Video Preview with Captions</div>
+                <video id="videoPlayer" controls width="100%" style="border-radius: 8px; margin-top: 10px;">
+                    <track id="captionTrack" kind="captions" srclang="en" label="English" default>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">📄 Original Transcription (English)</div>
+                <div class="result-text" id="transcription"></div>
+            </div>
+
+            <div class="result-item" id="simplificationSection" style="display: none;">
+                <div class="result-label">✨ Simplified Text (AI)</div>
+                <div class="result-text" id="simplification" style="font-size: 1.1em; color: #2e7d32;"></div>
+            </div>
+
+            <div class="result-item" id="enrichmentSection" style="display: none;">
+                <div class="result-label">🔑 Smart Keywords & Emojis</div>
+                <div class="result-text" id="enrichment"
+                    style="font-size: 1.1em; color: #8e44ad; background: #f3e5f5; padding: 10px; border-radius: 8px;">
+                </div>
+            </div>
+
+            <div class="result-item" id="translationSection" style="display: none;">
+                <div class="result-label">🌐 Translation</div>
+                <div class="result-text" id="translation"></div>
+            </div>
+
+            <div class="result-item" id="toneSection" style="display: none;">
+                <div class="result-label">🎭 Tone & Intent Analysis</div>
+                <div class="result-text" id="toneDisplay"></div>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">⏱️ Processing Stats</div>
+                <div class="result-text" id="stats"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('videoFile');
+        const fileInfo = document.getElementById('fileInfo');
+        const processBtn = document.getElementById('processBtn');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const captionTrack = document.getElementById('captionTrack');
+
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                showFileInfo(selectedFile);
+                processBtn.disabled = false;
+
+                // Set video source for local preview
+                const fileURL = URL.createObjectURL(selectedFile);
+                videoPlayer.src = fileURL;
+                document.getElementById('videoSection').style.display = 'block';
+            }
+        });
+
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            if (e.dataTransfer.files.length > 0) {
+                selectedFile = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files;
+                showFileInfo(selectedFile);
+                processBtn.disabled = false;
+
+                // Set video source for local preview
+                const fileURL = URL.createObjectURL(selectedFile);
+                videoPlayer.src = fileURL;
+                document.getElementById('videoSection').style.display = 'block';
+            }
+        });
+
+        function showFileInfo(file) {
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        async function processVideo() {
+            if (!selectedFile) return;
+
+            const translateLang = document.getElementById('translateLang').value;
+
+            // Show loading
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('results').classList.remove('show');
+            processBtn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('language', 'en');
+                if (translateLang) {
+                    formData.append('translate_to', translateLang);
+                }
+
+                const response = await fetch('http://127.0.0.1:8001/api/v1/video/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                // Display results
+                // Use Enriched text if available for the main transcription
+                if (result.enrichment && result.enrichment.text) {
+                    document.getElementById('transcription').innerHTML = result.enrichment.text;
+                } else {
+                    document.getElementById('transcription').textContent = result.transcription.text || '(No speech detected)';
+                }
+
+                // Handle Simplification removed as per user request (Live Only)
+
+                // Enrichment Section (Optional: We can hide this if we merged it above, but let's keep it if distinct)
+                // Actually, let's hide the separate enrichment section since user wants the main text highlighted.
+                document.getElementById('enrichmentSection').style.display = 'none';
+
+                // Handle VTT Captions
+                if (result.transcription.vtt) {
+                    const vttBlob = new Blob([result.transcription.vtt], { type: 'text/vtt' });
+                    const vttUrl = URL.createObjectURL(vttBlob);
+                    captionTrack.src = vttUrl;
+                    videoPlayer.textTracks[0].mode = 'showing';
+                }
+
+                if (result.translation) {
+                    // Use innerHTML for enriched translation
+                    document.getElementById('translation').innerHTML = result.translation.text;
+                    document.getElementById('translationSection').style.display = 'block';
+                } else {
+                    document.getElementById('translationSection').style.display = 'none';
+                }
+
+                // Handle Tone & Intent (Feature 7)
+                if (result.tone && result.tone.emoji) {
+                    const toneColors = {
+                        'question': '#3498db', 'urgent': '#e74c3c',
+                        'happy': '#2ecc71', 'command': '#8e44ad',
+                        'neutral': '#95a5a6', 'angry': '#e74c3c'
+                    };
+                    const color = toneColors[result.tone.primary_tone] || '#95a5a6';
+                    document.getElementById('toneDisplay').innerHTML = `
+                        <div style="font-size: 2em; margin-bottom: 10px;">${result.tone.emoji}</div>
+                        <strong>Emotion:</strong> ${result.tone.emotion} &nbsp; | &nbsp;
+                        <strong>Intent:</strong> ${result.tone.intent} &nbsp; | &nbsp;
+                        <strong>Confidence:</strong> ${result.tone.confidence.toFixed(2)}
+                    `;
+                    document.getElementById('toneSection').style.display = 'block';
+                    document.getElementById('toneSection').style.borderLeftColor = color;
+                } else {
+                    document.getElementById('toneSection').style.display = 'none';
+                }
+
+                document.getElementById('stats').innerHTML = `
+                    <strong>Duration:</strong> ${result.duration.toFixed(2)}s<br>
+                    <strong>Processing Time:</strong> ${result.transcription.processing_time.toFixed(2)}s<br>
+                    <strong>Language:</strong> ${result.transcription.language}
+                `;
+
+                document.getElementById('results').classList.add('show');
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                document.getElementById('loading').classList.remove('show');
+                processBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>

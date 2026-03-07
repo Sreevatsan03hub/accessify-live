@@ -1,0 +1,540 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ════════════════════════════════════════════════════════════════════
+   ACCESSIFY — GLOBAL DESIGN SYSTEM
+   Single source of truth. No duplicate blocks.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 0. Box model ────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── 1. Body base ────────────────────────────────────────────────── */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #F8FAFC;
+  /* light page bg  */
+  color: #0F172A;
+  /* near-black base */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 2. Heading scale (all pages) ───────────────────────────────── */
+h1 {
+  font-size: 34px;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0F172A;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+h5,
+h6 {
+  font-weight: 600;
+  color: #0F172A;
+}
+
+/* ─ EXCEPTION: dark-section headings keep white ─ */
+.section-dark h1,
+.section-dark h2,
+.section-dark h3,
+.section-dark h4 {
+  color: #FFFFFF;
+}
+
+/* ── 3. Paragraph / body text ───────────────────────────────────── */
+p {
+  color: #475569;
+  font-size: 14px;
+}
+
+li {
+  color: #475569;
+  font-size: 14px;
+}
+
+/* ── 4. Labels — ALWAYS dark & bold ─────────────────────────────── */
+label {
+  font-weight: 600 !important;
+  color: #0F172A !important;
+  font-size: 13px;
+}
+
+/* ── 5. Forms / Inputs ──────────────────────────────────────────── */
+.input-field {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #111827;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.input-field:focus {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+
+.input-field::placeholder {
+  color: #94A3B8;
+}
+
+.input-field:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #F8FAFC;
+}
+
+/* select inherits input-field */
+select.input-field {
+  appearance: auto;
+}
+
+/* ── 6. Cards ───────────────────────────────────────────────────── */
+.card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.card-hover {
+  cursor: pointer;
+}
+
+.card-hover:hover {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.10);
+  transform: translateY(-3px);
+}
+
+/* Card interior text always dark */
+.card h1,
+.card h2,
+.card h3,
+.card h4 {
+  color: #0F172A;
+}
+
+.card p {
+  color: #475569;
+}
+
+.card label {
+  color: #0F172A !important;
+  font-weight: 600 !important;
+}
+
+/* ── 7. Tip / info box ──────────────────────────────────────────── */
+.tip-box {
+  background: #EFF6FF;
+  border-left: 4px solid #2563EB;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #1E293B;
+  font-size: 13px;
+}
+
+.tip-box strong {
+  color: #1E3A8A;
+}
+
+/* ── 8. Buttons ─────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #2563EB;
+  color: #FFFFFF !important;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.btn-primary:hover {
+  background: #1D4ED8;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #FFFFFF;
+  color: #0F172A;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s;
+}
+
+.btn-secondary:hover {
+  border-color: #2563EB;
+  color: #2563EB;
+}
+
+/* ── 9. Navbar (stays dark) ─────────────────────────────────────── */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  height: 64px;
+  background: linear-gradient(90deg, #0F172A, #1E3A8A);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.20);
+}
+
+.navbar *,
+.navbar a,
+.navbar span,
+.navbar p {
+  color: #FFFFFF;
+}
+
+.navbar label {
+  color: #FFFFFF !important;
+}
+
+/* ── 10. Tables ─────────────────────────────────────────────────── */
+th {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: #64748B !important;
+}
+
+td {
+  font-size: 14px;
+  color: #0F172A;
+}
+
+/* ── 11. Caption system (student room — dark bg intentional) ─────── */
+.caption-panel {
+  max-height: 420px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+}
+
+.caption-card {
+  background: rgba(255, 255, 255, 0.07);
+  border-left: 4px solid #2563EB;
+  border-radius: 8px;
+  padding: 16px 20px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.caption-text {
+  font-size: clamp(1rem, 3.5vw, 1.6rem);
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.caption-simplified {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
+.keyword-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: #0EA5E9;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 4px 4px 0;
+}
+
+.tone-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(37, 99, 235, 0.15);
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  margin-top: 6px;
+}
+
+.sound-event-banner {
+  width: 100%;
+  padding: 14px;
+  background: #0EA5E9;
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 700;
+  text-align: center;
+  margin: 12px 0;
+  animation: pulse 0.5s ease-out;
+}
+
+/* ── 12. Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+/* ── 13. Focus ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+/* ── 14. Override Tailwind text-white on light pages ────────────── */
+/* Any element that's NOT inside a dark-section should have readable text */
+.text-white-on-light {
+  color: #0F172A !important;
+}
+
+/* Fix common mistake: pages that wrap with bg-bg-dark but form is inside white card */
+.bg-bg-dark label,
+.bg-bg-dark .card label {
+  color: #0F172A !important;
+}
+
+.bg-bg-dark .card p {
+  color: #475569 !important;
+}
+
+.bg-bg-dark .card h1,
+.bg-bg-dark .card h2,
+.bg-bg-dark .card h3 {
+  color: #0F172A !important;
+}
+
+/* ── 15. Animations ─────────────────────────────────────────────── */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ── 16. Accessibility ──────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ── 17. CSS variables (for legacy component usage) ─────────────── */
+:root {
+  --primary: #2563EB;
+  --primary-lt: #EFF6FF;
+  --accent: #0EA5E9;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --bg-app: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-dark: #1E293B;
+  --bg-darker: #0F172A;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-light: #94A3B8;
+  --border: #E2E8F0;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.15);
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   STYLISH GLOBAL UTILITIES
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Gradient text (blue → purple) ─────────────────────────── */
+.text-gradient {
+  background: linear-gradient(90deg, #2563EB, #7C3AED);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Blue-purple heading accent bar ────────────────────────── */
+.heading-accent::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 1em;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #2563EB, #7C3AED);
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+/* ── Small section label (e.g. "AI-Powered", "Live", etc.) ── */
+.section-label {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #EFF6FF, #F5F3FF);
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+}
+
+/* ── Gradient icon box ──────────────────────────────────────── */
+.icon-gradient-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Glowing primary button ─────────────────────────────────── */
+.btn-glow {
+  background: linear-gradient(135deg, #2563EB, #1D4ED8);
+  color: #fff;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 22px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+  transition: all 0.2s;
+}
+
+.btn-glow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.45);
+}
+
+/* ── Animated Live pulse ────────────────────────────────────── */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22C55E;
+  display: inline-block;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+}
