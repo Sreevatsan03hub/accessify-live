@@ -160,4 +160,3 @@ python -m pytest tests/
 ## 📄 License
 
 This project is licensed under the **MIT License**.  
-*Proudly built by **Sreevatsan** to make education accessible for everyone.*
